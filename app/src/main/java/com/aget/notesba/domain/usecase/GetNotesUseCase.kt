@@ -1,13 +1,10 @@
 package com.aget.notesba.domain.usecase
 
-import com.aget.notesba.domain.model.Note
 import com.aget.notesba.domain.repository.NoteRepository
-import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
 
-class GetNotesUseCase(
+class GetNotesUseCase @Inject constructor(
     private val repository: NoteRepository
 ) {
-    operator fun invoke(): Flow<List<Note>> {
-        return repository.observeNotes()
-    }
+    operator fun invoke() = repository.observeNotes()
 }

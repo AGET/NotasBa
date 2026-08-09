@@ -208,7 +208,7 @@ fun NoteEditorScreen(
                 Text("Adjuntar archivo")
             }
 
-            // Dibujo
+            // Draw
             if (state.isDrawing) {
 
                 DrawingCanvas(
@@ -218,7 +218,7 @@ fun NoteEditorScreen(
                 )
             }
 
-            // Adjunto
+            // Attach
             if (
                 state.attachmentPath != null
             ) {
@@ -231,7 +231,7 @@ fun NoteEditorScreen(
                 )
             }
 
-            // Errores
+            // Errors
             if (state.error != null) {
 
                 Text(

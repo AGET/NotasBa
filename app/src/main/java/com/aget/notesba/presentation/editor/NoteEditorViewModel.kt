@@ -1,10 +1,8 @@
 package com.aget.notesba.presentation.editor
 
 import android.net.Uri
-import android.os.Build
-import androidx.annotation.RequiresApi
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.aget.notesba.data.storage.DrawingRenderer
 import com.aget.notesba.data.storage.FileStorage
@@ -14,21 +12,27 @@ import com.aget.notesba.domain.model.Note
 import com.aget.notesba.domain.usecase.CreateNoteUseCase
 import com.aget.notesba.domain.usecase.GetNoteUseCase
 import com.aget.notesba.domain.usecase.UpdateNoteUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import javax.inject.Inject
 
-class NoteEditorViewModel(
-    private val noteId: Long?,
-    private val getNote: GetNoteUseCase,
-    private val createNote: CreateNoteUseCase,
-    private val updateNote: UpdateNoteUseCase,
+@HiltViewModel
+class NoteEditorViewModel @Inject constructor(
+    private val getNoteUseCase: GetNoteUseCase,
+    private val createNoteUseCase: CreateNoteUseCase,
+    private val updateNoteUseCase: UpdateNoteUseCase,
     private val fileStorage: FileStorage,
-    private val drawingRenderer: DrawingRenderer
+    private val drawingRenderer: DrawingRenderer,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    private val noteId: Long? =
+        savedStateHandle.get<Long>("noteId")
 
     private val _uiState =
         MutableStateFlow(
@@ -47,13 +51,28 @@ class NoteEditorViewModel(
         }
     }
 
-    private fun loadNote(id: Long) {
-
+    private fun loadNote(
+        id: Long
+    ) {
         viewModelScope.launch {
 
-            val note = getNote(id)
+            try {
 
-            if (note != null) {
+                val note =
+                    getNoteUseCase(id)
+
+                if (note == null) {
+
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error =
+                                "No se encontró la nota"
+                        )
+                    }
+
+                    return@launch
+                }
 
                 _uiState.update {
                     it.copy(
@@ -67,27 +86,35 @@ class NoteEditorViewModel(
                     )
                 }
 
-            } else {
+            } catch (exception: Exception) {
 
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = "No se encontró la nota"
+                        error =
+                            exception.message
+                                ?: "No se pudo cargar la nota"
                     )
                 }
             }
         }
     }
 
-    fun onTextChange(text: String) {
-
+    fun onTextChange(
+        text: String
+    ) {
         _uiState.update {
-            it.copy(text = text)
+            it.copy(
+                text = text,
+                error = null
+            )
         }
     }
 
-    fun onImageSelected(uri: Uri) {
-
+    fun onImageSelected(
+        uri: Uri,
+        extension: String = "jpg"
+    ) {
         viewModelScope.launch {
 
             try {
@@ -95,7 +122,7 @@ class NoteEditorViewModel(
                 val path =
                     fileStorage.copyFromUri(
                         uri = uri,
-                        extension = "jpg"
+                        extension = extension
                     )
 
                 replaceAttachment(
@@ -108,15 +135,18 @@ class NoteEditorViewModel(
                 _uiState.update {
                     it.copy(
                         error =
-                            "No se pudo guardar la imagen"
+                            exception.message
+                                ?: "No se pudo guardar la imagen"
                     )
                 }
             }
         }
     }
 
-    fun onFileSelected(uri: Uri) {
-
+    fun onFileSelected(
+        uri: Uri,
+        extension: String = "jpg"
+    ) {
         viewModelScope.launch {
 
             try {
@@ -124,7 +154,7 @@ class NoteEditorViewModel(
                 val path =
                     fileStorage.copyFromUri(
                         uri = uri,
-                        extension = "file"
+                        extension = extension
                     )
 
                 replaceAttachment(
@@ -137,75 +167,56 @@ class NoteEditorViewModel(
                 _uiState.update {
                     it.copy(
                         error =
-                            "No se pudo guardar el archivo"
+                            exception.message
+                                ?: "No se pudo guardar el archivo"
                     )
                 }
             }
         }
     }
 
-    private suspend fun replaceAttachment(
+    private fun replaceAttachment(
         path: String,
         type: AttachmentType
     ) {
-
-        val previousPath =
-            _uiState.value.attachmentPath
-
-        if (
-            previousPath != null &&
-            previousPath != path
-        ) {
-            fileStorage.delete(previousPath)
-        }
-
         _uiState.update {
             it.copy(
                 attachmentPath = path,
-                attachmentType = type
+                attachmentType = type,
+                drawingStrokes = emptyList(),
+                isDrawing = false,
+                error = null
             )
         }
     }
 
     fun startDrawing() {
-
         _uiState.update {
             it.copy(
-                isDrawing = true
+                isDrawing = true,
+                error = null
             )
         }
     }
 
-    fun onDrawingStrokeFinished(stroke: DrawingStroke) {
-        _uiState.update { it.copy(drawingStrokes = it.drawingStrokes + stroke, isDrawing = true) }
-    }
-
-    private suspend fun createDrawingIfNeeded(): String? {
-
-        val state = _uiState.value
-
-        if (state.drawingStrokes.isEmpty()) {
-            return state.attachmentPath
-        }
-
-        val bitmap =
-            drawingRenderer.render(
-                strokes = state.drawingStrokes,
-                width = 1080,
-                height = 1200
+    fun onDrawingStrokeFinished(
+        stroke: DrawingStroke
+    ) {
+        _uiState.update {
+            it.copy(
+                drawingStrokes =
+                    it.drawingStrokes + stroke,
+                isDrawing = true,
+                error = null
             )
-
-        return fileStorage.saveDrawing(
-            bitmap
-        )
+        }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
     fun save(
         onSuccess: () -> Unit
     ) {
-
-        val state = _uiState.value
+        val state =
+            _uiState.value
 
         if (
             state.text.isBlank() &&
@@ -234,46 +245,59 @@ class NoteEditorViewModel(
 
             try {
 
-                val now = Instant.now()
+                val oldNote =
+                    state.noteId?.let {
+                        getNoteUseCase(it)
+                    }
 
-                // Generar PNG del dibujo
+           // Prioridad al dibujo
                 val attachmentPath =
-                    createDrawingIfNeeded()
+                    if (
+                        state.drawingStrokes.isNotEmpty()
+                    ) {
+                        createDrawing()
+                    } else {
+                        state.attachmentPath
+                    }
 
                 val attachmentType =
-                    if (state.drawingStrokes.isNotEmpty()) {
+                    if (
+                        state.drawingStrokes.isNotEmpty()
+                    ) {
                         AttachmentType.DRAWING
                     } else {
                         state.attachmentType
                     }
 
-                // Crear
+                val now =
+                    Instant.now()
+
                 if (state.noteId == null) {
 
-                    val note = Note(
-                        text = state.text,
-                        attachmentPath =
-                            attachmentPath,
-                        attachmentType =
-                            attachmentType,
-                        createdAt = now,
-                        updatedAt = now
-                    )
+                    val note =
+                        Note(
+                            text = state.text,
+                            attachmentPath =
+                                attachmentPath,
+                            attachmentType =
+                                attachmentType,
+                            createdAt = now,
+                            updatedAt = now
+                        )
 
-                    createNote(note)
+                    createNoteUseCase(note)
 
                 } else {
 
-                    // Ediciones
-                    val existing =
-                        getNote(state.noteId)
+                    if (oldNote == null) {
 
-                    if (existing != null) {
+                        throw IllegalStateException(
+                            "La nota ya no existe"
+                        )
+                    }
 
-                        val oldAttachment =
-                            existing.attachmentPath
-
-                        val note = existing.copy(
+                    val updatedNote =
+                        oldNote.copy(
                             text = state.text,
                             attachmentPath =
                                 attachmentPath,
@@ -282,18 +306,17 @@ class NoteEditorViewModel(
                             updatedAt = now
                         )
 
-                        updateNote(note)
+                    updateNoteUseCase(
+                        updatedNote
+                    )
 
-                        // Eliminar el archivo anterior
-                        // solamente si cambió.
-                        if (
-                            oldAttachment != null &&
-                            oldAttachment != attachmentPath
-                        ) {
-                            fileStorage.delete(
-                                oldAttachment
-                            )
-                        }
+                    if (
+                        oldNote.attachmentPath != null &&
+                        oldNote.attachmentPath != attachmentPath
+                    ) {
+                        fileStorage.delete(
+                            oldNote.attachmentPath
+                        )
                     }
                 }
 
@@ -303,7 +326,8 @@ class NoteEditorViewModel(
                         attachmentPath =
                             attachmentPath,
                         attachmentType =
-                            attachmentType
+                            attachmentType,
+                        isDrawing = false
                     )
                 }
 
@@ -323,39 +347,20 @@ class NoteEditorViewModel(
         }
     }
 
-    class Factory(
-        private val noteId: Long?,
-        private val getNote: GetNoteUseCase,
-        private val createNote: CreateNoteUseCase,
-        private val updateNote: UpdateNoteUseCase,
-        private val fileStorage: FileStorage,
-        private val drawingRenderer: DrawingRenderer
-    ) : ViewModelProvider.Factory {
+    private fun createDrawing(): String {
 
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(
-            modelClass: Class<T>
-        ): T {
+        val strokes =
+            _uiState.value.drawingStrokes
 
-            if (
-                modelClass.isAssignableFrom(
-                    NoteEditorViewModel::class.java
-                )
-            ) {
-
-                return NoteEditorViewModel(
-                    noteId = noteId,
-                    getNote = getNote,
-                    createNote = createNote,
-                    updateNote = updateNote,
-                    fileStorage = fileStorage,
-                    drawingRenderer = drawingRenderer
-                ) as T
-            }
-
-            throw IllegalArgumentException(
-                "ViewModel desconocido"
+        val bitmap =
+            drawingRenderer.render(
+                strokes = strokes,
+                width = 1080,
+                height = 1200
             )
-        }
+
+        return fileStorage.saveDrawing(
+            bitmap
+        )
     }
 }

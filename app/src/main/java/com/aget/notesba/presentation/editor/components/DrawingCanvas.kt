@@ -108,7 +108,7 @@ fun DrawingCanvas(
                 }
         }
 
-        // Trazo actual
+        // Current draw
         currentStroke
             .zipWithNext()
             .forEach { (start, end) ->

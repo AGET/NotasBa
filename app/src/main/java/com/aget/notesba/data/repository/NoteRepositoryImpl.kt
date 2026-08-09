@@ -8,8 +8,9 @@ import com.aget.notesba.domain.repository.NoteRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
+import javax.inject.Inject
 
-class NoteRepositoryImpl(
+class NoteRepositoryImpl @Inject constructor(
     private val dao: NoteDao
 ) : NoteRepository {
 

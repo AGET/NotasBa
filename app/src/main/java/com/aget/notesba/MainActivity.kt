@@ -8,7 +8,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.aget.notesba.presentation.navigation.AppNavigation
 import com.aget.notesba.ui.theme.NotesBaTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(
@@ -23,7 +25,6 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize()
                 ) {
-
                     AppNavigation()
                 }
             }
