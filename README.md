@@ -1,7 +1,7 @@
 # NotasBa
 
 
-| Elemento      | Con Tamaño Ajustado (HTML)                                    |
+| Elemento      | Evidencia                                                     |
 |:--------------|:--------------------------------------------------------------|
 | Crear nota    | <img src="external_resourses/1.png" width="150" height="300"> |
 | Nota con foto | <img src="external_resourses/2.png" width="150" height="300"> |
